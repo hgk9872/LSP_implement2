@@ -28,11 +28,31 @@ typedef struct Queue
     int count;
 }Queue;
 
+// fileinfo structure
+typedef struct fileinfo {
+    int count;
+    char hash[PATHMAX];
+//    char *pathlist[PATHMAX];
+    char path[PATHMAX];
+    size_t size;
+}fileinfo;
+
+// 링크드리스트 구조체
+typedef struct listNode {
+    fileinfo data;
+    struct listNode *next;
+}listNode;
+
+listNode *head = NULL;
+
+
 void InitQueue(Queue *queue);
 int isEmpty(Queue *queue);
 void Enqueue(Queue *queue, char *path);
 char *Dequeue(Queue *queue);
-
+listNode* add_list(listNode *head, char *pathname);
+listNode* insert_node(listNode *head, fileinfo tmp); 
+void print_list(listNode *head);
 
 int split(char *input, char *delimiter, char* argv[]);
 void command_help(void);
@@ -187,12 +207,13 @@ void fmd5(int argc, char *argv[])
 
             if (S_ISDIR(statbuf.st_mode)) // 폴더인 경우 큐에 추가
                 Enqueue(&queue, pathname);
-//            else if (S_ISREG(statbuf.st_mode))
+            else if (S_ISREG(statbuf.st_mode))
+                head = add_list(head, pathname);
 //                printf("filepath : %s\n", pathname);
 
         }
     }
-
+    print_list(head);
     return;
 
 }
@@ -249,7 +270,34 @@ char *Dequeue(Queue *queue)
     return path;
 }
     
+// 파일을 연결리스트에 추가하여 중복파일 관리
+listNode* add_list(listNode* head, char *pathname)
+{
+    fileinfo tmp;
 
+    // 만약 파일이 있는 경우 count++, pathlist++
+//    update_node();
+    // don't exist in linked file list
+    tmp.count = 1;
+    strcpy(tmp.hash, "a");
+    strcpy(tmp.path, pathname);
+    tmp.size = 10;
+    head = insert_node(head, tmp);
+//    print_list(head);
+}
 
+listNode* insert_node(listNode *head, fileinfo tmp)
+{
+    listNode *p = (listNode*)malloc(sizeof(listNode));
+    p->data = tmp;
+    p->next = head;
+    head = p;
 
+    return head;
+}
 
+void print_list(listNode* head)
+{
+    for (listNode *p = head; p != NULL; p = p->next)
+        printf("%s\n", p->data.path);
+}
