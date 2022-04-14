@@ -220,7 +220,7 @@ void fmd5(int argc, char *argv[])
 
         }
     }
-//    delete_node(head);
+    head = delete_node(head);
     print_list(head);
     return;
 
@@ -310,6 +310,8 @@ listNode* add_list(listNode* head, char *pathname)
         tmp.size = statbuf.st_size;
         head = insert_node(head, tmp);
     }
+    
+    return head;
 }
 
 // 노드 삽입
@@ -384,6 +386,14 @@ listNode* update_node(listNode* p, char *pathname)
 listNode* delete_node(listNode* head)
 {
     listNode* delete;
+
+    if (head == NULL) return NULL;
+
+    if (head->data.count == 1) {
+        delete = head;
+        head = delete->next;
+        free(delete);
+    }
 
     for (listNode *p = head; p != NULL; p = p->next) {
         delete = p->next;
