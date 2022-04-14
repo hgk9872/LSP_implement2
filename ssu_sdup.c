@@ -34,10 +34,10 @@ typedef struct Queue
 typedef struct fileinfo {
     int count;
     char hash[PATHMAX];
-    char mtime[BUFMAX];
-    char atime[BUFMAX];
-//    char *pathlist[PATHMAX];
-    char path[PATHMAX];
+    char mtime[100][BUFMAX];
+    char atime[100][BUFMAX];
+    char pathlist[100][PATHMAX];
+//    char path[PATHMAX];
     size_t size;
 }fileinfo;
 
@@ -302,9 +302,9 @@ listNode* add_list(listNode* head, char *pathname)
     else {
         tmp.count = 1;
         strcpy(tmp.hash, "hash");
-        strcpy(tmp.mtime, get_time(statbuf.st_mtime));
-        strcpy(tmp.atime, get_time(statbuf.st_atime));
-        strcpy(tmp.path, pathname);
+        strcpy(tmp.mtime[0], get_time(statbuf.st_mtime));
+        strcpy(tmp.atime[0], get_time(statbuf.st_atime));
+        strcpy(tmp.pathlist[0], pathname);
         tmp.size = statbuf.st_size;
         head = insert_node(head, tmp);
     }
@@ -324,12 +324,16 @@ listNode* insert_node(listNode *head, fileinfo tmp)
 // 연결리스트의 각 노드의 정보(파일)들 출력
 void print_list(listNode* head)
 {
+    int count;
+
     for (listNode *p = head; p != NULL; p = p->next) {
-        printf("count [%d] ", p->data.count);
-        printf("%ld ", p->data.size);
-        printf("%s ", p->data.path);
-        printf("(mtime : %s) ", p->data.mtime);
-        printf("(atime : %s)\n", p->data.atime);
+        count = p->data.count;
+        printf("size : %ld bytes \n", p->data.size);
+        for (int i = 0; i < count; i++) {
+            printf("%s ", p->data.pathlist[i]);
+            printf("(mtime : %s) ", p->data.mtime[i]);
+            printf("(atime : %s)\n", p->data.atime[i]);
+        }
     }
 }
 
@@ -359,9 +363,17 @@ listNode* search_size(listNode* head, int size)
     return NULL;
 }
 
+// 노드의 카운트수, 파일경로, mtime, atime을 수정해주는 함수
 listNode* update_node(listNode* p, char *pathname)
 {
-    p->data.count ++;
-    strcpy(p->data.path, pathname); 
+    struct stat statbuf;
+
+    lstat(pathname, &statbuf);
+
+    int count = p->data.count++;
+    strcpy(p->data.pathlist[count], pathname); 
+    strcpy(p->data.mtime[count], get_time(statbuf.st_mtime));
+    strcpy(p->data.atime[count], get_time(statbuf.st_atime));
+
     return p;
 }
