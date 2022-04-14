@@ -34,9 +34,9 @@ typedef struct Queue
 typedef struct fileinfo {
     int count;
     char hash[PATHMAX];
-    char mtime[100][BUFMAX];
-    char atime[100][BUFMAX];
-    char pathlist[100][PATHMAX];
+    char mtime[1000][20];
+    char atime[1000][20];
+    char pathlist[1000][PATHMAX];
 //    char path[PATHMAX];
     size_t size;
 }fileinfo;
@@ -63,6 +63,7 @@ void command_help(void);
 void fmd5(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 listNode* update_node(listNode *p, char *pathname);
+listNode* delete_node(listNode* head);
 
 int main(void)
 {
@@ -219,6 +220,7 @@ void fmd5(int argc, char *argv[])
 
         }
     }
+//    delete_node(head);
     print_list(head);
     return;
 
@@ -376,4 +378,20 @@ listNode* update_node(listNode* p, char *pathname)
     strcpy(p->data.atime[count], get_time(statbuf.st_atime));
 
     return p;
+}
+
+//remove count==1
+listNode* delete_node(listNode* head)
+{
+    listNode* delete;
+
+    for (listNode *p = head; p != NULL; p = p->next) {
+        delete = p->next;
+        if (delete->data.count == 1) {
+            p->next = delete->next;
+            free(delete);
+        }
+    }
+
+    return head;
 }
