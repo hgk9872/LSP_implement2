@@ -7,6 +7,8 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define PATHMAX 4096
 #define NAMEMAX 255
@@ -32,6 +34,8 @@ typedef struct Queue
 typedef struct fileinfo {
     int count;
     char hash[PATHMAX];
+    char mtime[BUFMAX];
+    char atime[BUFMAX];
 //    char *pathlist[PATHMAX];
     char path[PATHMAX];
     size_t size;
@@ -53,10 +57,12 @@ char *Dequeue(Queue *queue);
 listNode* add_list(listNode *head, char *pathname);
 listNode* insert_node(listNode *head, fileinfo tmp); 
 void print_list(listNode *head);
-
+char *get_time(time_t stime);
 int split(char *input, char *delimiter, char* argv[]);
 void command_help(void);
 void fmd5(int argc, char *argv[]);
+listNode* search_size(listNode *head, int size);
+listNode* update_node(listNode *p, char *pathname);
 
 int main(void)
 {
@@ -274,18 +280,37 @@ char *Dequeue(Queue *queue)
 listNode* add_list(listNode* head, char *pathname)
 {
     fileinfo tmp;
+    struct stat statbuf;
+    int size;
+    listNode* p;
+
+    // 에러 처리
+    if (lstat(pathname, &statbuf) < 0) {
+        fprintf(stderr, "lstat error for %s\n", pathname);
+        exit(1);
+    }
+
+    size = statbuf.st_size;
 
     // 만약 파일이 있는 경우 count++, pathlist++
-//    update_node();
-    // don't exist in linked file list
-    tmp.count = 1;
-    strcpy(tmp.hash, "a");
-    strcpy(tmp.path, pathname);
-    tmp.size = 10;
-    head = insert_node(head, tmp);
-//    print_list(head);
+    if ((p = search_size(head, size)) != NULL) { // 만약 파일 크기가 동일한 경우 
+//        if (campare_hash))    // 해쉬값도 같다면 
+            update_node(p, pathname);     // 중복 파일 리스트에 추가
+    }
+
+    // 파일이 기존 링크드리스트에 존재하지 않는 경우 
+    else {
+        tmp.count = 1;
+        strcpy(tmp.hash, "hash");
+        strcpy(tmp.mtime, get_time(statbuf.st_mtime));
+        strcpy(tmp.atime, get_time(statbuf.st_atime));
+        strcpy(tmp.path, pathname);
+        tmp.size = statbuf.st_size;
+        head = insert_node(head, tmp);
+    }
 }
 
+// 노드 삽입
 listNode* insert_node(listNode *head, fileinfo tmp)
 {
     listNode *p = (listNode*)malloc(sizeof(listNode));
@@ -296,8 +321,47 @@ listNode* insert_node(listNode *head, fileinfo tmp)
     return head;
 }
 
+// 연결리스트의 각 노드의 정보(파일)들 출력
 void print_list(listNode* head)
 {
-    for (listNode *p = head; p != NULL; p = p->next)
-        printf("%s\n", p->data.path);
+    for (listNode *p = head; p != NULL; p = p->next) {
+        printf("count [%d] ", p->data.count);
+        printf("%ld ", p->data.size);
+        printf("%s ", p->data.path);
+        printf("(mtime : %s) ", p->data.mtime);
+        printf("(atime : %s)\n", p->data.atime);
+    }
+}
+
+// 파일 시간 출력을 위한 함수
+char *get_time(time_t stime)
+{
+    char *time = (char*)malloc(sizeof(char) * BUFMAX);
+    struct tm *tm;
+
+    tm = localtime(&stime);
+    sprintf(time, "%04d-%02d-%02d %02d:%02d:%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    return time;
+}
+
+// 파일의 크기가 동일한 파일을 연결리스트에서 찾는 함수
+listNode* search_size(listNode* head, int size)
+{
+    listNode *p = head;
+
+    while (p != NULL) {
+        if(p->data.size == size)
+            return p;
+        p = p->next;
+    }
+
+    return NULL;
+}
+
+listNode* update_node(listNode* p, char *pathname)
+{
+    p->data.count ++;
+    strcpy(p->data.path, pathname); 
+    return p;
 }
