@@ -9,11 +9,16 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
+#include <openssl/md5.h>
 
 #define PATHMAX 4096
 #define NAMEMAX 255
 #define BUFMAX 1024
 #define ARGMAX 5
+
+//#if !defined(_OSD_POSIX) && !defined(__DJGPP__)
+//int read(int, void *, unsigned int);
+//#endif
 
 // Queue를 이용한 디렉토리 탐색을 위한 노드 정의
 typedef struct Node
@@ -34,9 +39,9 @@ typedef struct Queue
 typedef struct fileinfo {
     int count;
     char hash[PATHMAX];
-    char mtime[1000][20];
-    char atime[1000][20];
-    char pathlist[1000][PATHMAX];
+    char mtime[100][20];
+    char atime[100][20];
+    char pathlist[100][PATHMAX];
 //    char path[PATHMAX];
     size_t size;
 }fileinfo;
@@ -60,10 +65,13 @@ void print_list(listNode *head);
 char *get_time(time_t stime);
 int split(char *input, char *delimiter, char* argv[]);
 void command_help(void);
-void fmd5(int argc, char *argv[]);
+void find_hash(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 listNode* update_node(listNode *p, char *pathname);
 listNode* delete_node(listNode* head);
+void sort_node(listNode* head);
+void swap_node(listNode* node1, listNode* node2);
+char* fmd5(char* pathname);
 
 int main(void)
 {
@@ -83,7 +91,7 @@ int main(void)
             continue;
 
         if (strcmp(argv[0], "fmd5") == 0)
-            fmd5(argc, argv); // fmd5 함수 구현중...
+            find_hash(argc, argv); // fmd5 함수 구현중...
 
         else if (strcmp(argv[0], "fsha1") == 0)
             printf("fsha1 호출\n"); // fsha1 함수 구현
@@ -134,16 +142,19 @@ void command_help(void)
 }
 
 // fmd5 해쉬값으로 파일 찾아서 중복파일 출력하는 함수
-void fmd5(int argc, char *argv[]) 
+void find_hash(int argc, char *argv[]) 
 {
     char dirname[PATHMAX];
     char pathname[PATHMAX];
+    struct timeval begin_t, end_t;
     struct stat statbuf;
     struct dirent** namelist;
     char *homeptr;
     int i;
     int count;
 
+    //
+    gettimeofday(&begin_t, NULL);
 
     // 입력 관련 에러 처리
     if (argc != ARGMAX) {
@@ -220,8 +231,20 @@ void fmd5(int argc, char *argv[])
 
         }
     }
-    head = delete_node(head);
+//    head = delete_node(head);
+    sort_node(head);
     print_list(head);
+
+    gettimeofday(&end_t, NULL);
+
+    //
+    end_t.tv_sec -= begin_t.tv_sec;
+    if (end_t.tv_sec < begin_t.tv_usec) {
+        end_t.tv_usec += 1000000;
+    }
+    end_t.tv_usec -= begin_t.tv_usec;
+    printf("Runtime: %ld:%06ld(sec:usec)\n", end_t.tv_sec, end_t.tv_usec);
+
     return;
 
 }
@@ -296,14 +319,16 @@ listNode* add_list(listNode* head, char *pathname)
 
     // 만약 파일이 있는 경우 count++, pathlist++
     if ((p = search_size(head, size)) != NULL) { // 만약 파일 크기가 동일한 경우 
-//        if (campare_hash))    // 해쉬값도 같다면 
+//        if (!strcmp(fmd5(p->data.pathlist[0]), fmd5(pathname)))    // 해쉬값도 같다면 
+            printf("%s \n", fmd5(p->data.pathlist[0]));
+            printf("%s \n", fmd5(pathname));
             update_node(p, pathname);     // 중복 파일 리스트에 추가
     }
 
     // 파일이 기존 링크드리스트에 존재하지 않는 경우 
     else {
         tmp.count = 1;
-        strcpy(tmp.hash, "hash");
+        strcpy(tmp.hash, fmd5(pathname));
         strcpy(tmp.mtime[0], get_time(statbuf.st_mtime));
         strcpy(tmp.atime[0], get_time(statbuf.st_atime));
         strcpy(tmp.pathlist[0], pathname);
@@ -332,7 +357,8 @@ void print_list(listNode* head)
 
     for (listNode *p = head; p != NULL; p = p->next) {
         count = p->data.count;
-        printf("size : %ld bytes \n", p->data.size);
+        printf("size : %ld bytes ", p->data.size);
+        printf("hash : %s \n", p->data.hash);
         for (int i = 0; i < count; i++) {
             printf("%s ", p->data.pathlist[i]);
             printf("(mtime : %s) ", p->data.mtime[i]);
@@ -404,4 +430,74 @@ listNode* delete_node(listNode* head)
     }
 
     return head;
+}
+
+void sort_node(listNode* head)
+{
+    listNode *p;
+    int num = 0;
+
+    //
+    if (head == NULL) 
+        return;
+
+    for (p = head; p != NULL; p = p->next)
+        num++;
+
+    p = head;
+
+    for (int i = 0; i < num-1; i++)
+    {
+        for (int j = 0; j < num-1-i; j++) {
+            if (p->data.size > p->next->data.size)
+                swap_node(p, p->next);
+            p = p->next;
+        }
+        p = head;
+    }
+
+//    return head;
+}
+
+void swap_node(listNode* node1, listNode* node2)
+{
+    fileinfo tmp;
+    tmp = node1->data;
+    node1->data = node2->data;
+    node2->data = tmp;
+}
+
+char* fmd5(char* pathname)
+{
+    int i;
+    FILE *IN;
+    static char hash[100];
+    MD5_CTX c;
+
+    IN = fopen(pathname, "r");
+    if (IN == NULL) {
+        fprintf(stderr, "hash error %s\n", pathname);
+        exit(1);
+    }
+
+    unsigned char md[MD5_DIGEST_LENGTH];
+    int fd;
+    static unsigned char buf[BUFMAX];
+
+    fd = fileno(IN);
+    MD5_Init(&c);
+    for (;;)
+    {
+        i = read(fd, buf, BUFMAX);
+        if (i <= 0) break;
+        MD5_Update(&c, buf, (unsigned long)i);
+    }
+    MD5_Final(&(md[0]), &c);
+
+    for (i = 0; i < MD5_DIGEST_LENGTH; i++)
+        sprintf(&hash[i*2], "%02x", md[i]);
+
+    fclose(IN);
+
+    return hash;
 }
