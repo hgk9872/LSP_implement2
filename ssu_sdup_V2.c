@@ -61,8 +61,9 @@ char *get_time(time_t stime);
 int split(char *input, char *delimiter, char* argv[]);
 void command_help(void);
 void find_hash(int argc, char *argv[]);
-//listNode* search_size(listNode *head, int size);
+listNode* search_size(listNode *head, int size);
 //listNode* update_node(listNode *p, char *pathname);
+void append_node(listNode* head, char* pathname);
 //listNode* delete_node(listNode* head);
 void sort_node(listNode* head);
 void swap_node(listNode* node1, listNode* node2);
@@ -236,7 +237,8 @@ listNode* add_list(listNode* head, char *pathname)
     size = statbuf.st_size;
 
     // 만약 파일이 있는 경우 count++, pathlist++
-//    if ((p = search_size(head, size)) != NULL) { // 만약 파일 크기가 동일한 경우 
+    if ((p = search_size(head, size)) != NULL) // 만약 파일 크기가 동일한 경우 
+        append_node(p, pathname);
 //        if (!strcmp(fmd5(p->data.pathlist[0]), fmd5(pathname)))    // 해쉬값도 같다면 
 //            printf("%s \n", fmd5(p->data.pathlist[0]));
 //            printf("%s \n", fmd5(pathname));
@@ -244,13 +246,13 @@ listNode* add_list(listNode* head, char *pathname)
 //    }
 
     // 파일이 기존 링크드리스트에 존재하지 않는 경우 
-//    else {
+    else {
         tmp.count = 1;
         strcpy(tmp.hash, fmd5(pathname));
         strcpy(tmp.path, pathname);
         tmp.size = statbuf.st_size;
         add_node(&head, tmp);
-//    }
+    }
     
     return head;
 }
@@ -319,6 +321,24 @@ void swap_node(listNode* node1, listNode* node2)
     node2->data = tmp;
 }
 
+//
+void append_node(listNode* p, char* pathname)
+{
+    listNode *newNode = (listNode*)malloc(sizeof(listNode));
+    int count = p->data.count;
+
+    p->data.count++;
+    newNode->data = p->data;
+
+    for (int i = 0; i < count-1; i++) {
+        p = p->next;
+        p->data.count++;
+    }
+
+    strcpy(p->data.path, pathname);
+    newNode->next = p->next;
+    p->next = newNode;
+}
 
 // 연결리스트의 각 노드의 정보(파일)들 출력
 void print_list(listNode* head)
@@ -328,7 +348,7 @@ void print_list(listNode* head)
 
     while(1) {
         printf("size : %ld bytes ", p->data.size);
-        printf("hash : %s ", p->data.hash);
+        printf("hash : %s\n", p->data.hash);
         for (int i = 0; i < num; i++) {
             printf("path : %s \n", p->data.path);
             p = p->next;
@@ -337,6 +357,7 @@ void print_list(listNode* head)
         num = p->data.count;
     }
 }
+
 
 
 
