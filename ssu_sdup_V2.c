@@ -198,7 +198,6 @@ void find_hash(int argc, char *argv[])
                 Enqueue(&queue, pathname);
             else if (S_ISREG(statbuf.st_mode))
                 head = add_list(head, pathname);
-
         }
     }
 
@@ -237,16 +236,16 @@ listNode* add_list(listNode* head, char *pathname)
     size = statbuf.st_size;
 
     // 만약 파일이 있는 경우 count++, pathlist++
-    if ((p = search_size(head, size)) != NULL) // 만약 파일 크기가 동일한 경우 
-        append_node(p, pathname);
-//        if (!strcmp(fmd5(p->data.pathlist[0]), fmd5(pathname)))    // 해쉬값도 같다면 
-//            printf("%s \n", fmd5(p->data.pathlist[0]));
-//            printf("%s \n", fmd5(pathname));
-//            update_node(p, pathname);     // 중복 파일 리스트에 추가
-//    }
+    for (p = head; p != NULL; p = p->next) {
+        if (p->data.size == size) {
+            if (!strcmp(fmd5(p->data.path), fmd5(pathname))) {
+                append_node(p, pathname);
+                break;
+            }
+        }
+    }
 
-    // 파일이 기존 링크드리스트에 존재하지 않는 경우 
-    else {
+    if (p == NULL) {
         tmp.count = 1;
         strcpy(tmp.hash, fmd5(pathname));
         strcpy(tmp.path, pathname);
@@ -335,7 +334,7 @@ void append_node(listNode* p, char* pathname)
         p->data.count++;
     }
 
-    strcpy(p->data.path, pathname);
+    strcpy(newNode->data.path, pathname);
     newNode->next = p->next;
     p->next = newNode;
 }
@@ -350,6 +349,7 @@ void print_list(listNode* head)
         printf("size : %ld bytes ", p->data.size);
         printf("hash : %s\n", p->data.hash);
         for (int i = 0; i < num; i++) {
+            printf("count : %d ", p->data.count);
             printf("path : %s \n", p->data.path);
             p = p->next;
         }
@@ -409,7 +409,7 @@ void Enqueue(Queue *queue, char *path)
 // 큐의 맨 앞의 원소를 뽑아 값을 리턴받음
 char *Dequeue(Queue *queue)
 {
-    static char path[PATHMAX];  // 지역변수를 리턴해야하는데, 일단 static 사용
+    char *path = (char*)malloc(sizeof(char) * PATHMAX);
     Node *now;
 
     if (isEmpty(queue)) // 큐가 비어있는 경우
@@ -459,8 +459,8 @@ char* fmd5(char* pathname)
 {
     int i;
     FILE *IN;
-    static char hash[100];
     MD5_CTX c;
+    char *hash = (char*)malloc(sizeof(char) * BUFMAX);
 
     IN = fopen(pathname, "r");
     if (IN == NULL) {
