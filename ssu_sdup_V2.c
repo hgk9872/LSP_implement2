@@ -235,16 +235,17 @@ listNode* add_list(listNode* head, char *pathname)
 
     size = statbuf.st_size;
 
-    // 만약 파일이 있는 경우 count++, pathlist++
+    // 리스트의 모든 노드를 순회하면서
     for (p = head; p != NULL; p = p->next) {
-        if (p->data.size == size) {
-            if (!strcmp(fmd5(p->data.path), fmd5(pathname))) {
-                append_node(p, pathname);
+        if (p->data.size == size) {          //   만약 사이즈가 같고,
+            if (!strcmp(fmd5(p->data.path), fmd5(pathname))) {  // 해시값도 같다면
+                append_node(p, pathname);    // 파일 세트의 맨 끝에 해당 파일 추가
                 break;
             }
         }
     }
 
+    // 모든 노드를 순회했을 때, 리스트에 존재하지 않는 경우
     if (p == NULL) {
         tmp.count = 1;
         strcpy(tmp.hash, fmd5(pathname));
@@ -256,7 +257,7 @@ listNode* add_list(listNode* head, char *pathname)
     return head;
 }
 
-//aos dkvdp
+//링크드리스트의 맨 앞에 노드를 추가하는 함수
 void add_node(listNode** head, fileinfo tmp)
 {
     listNode *p = (listNode*)malloc(sizeof(listNode));
@@ -285,7 +286,7 @@ listNode* search_size(listNode* head, int size)
     return NULL;
 }
 
-// wjdfuf
+// 노드의 사이즈를 기준으로 오름차순 정렬하는 함수
 void sort_node(listNode* head)
 {
     listNode *p;
@@ -311,7 +312,7 @@ void sort_node(listNode* head)
     }
 }
 
-//swap
+// 두 노드의 데이터를 바꾸는 함수
 void swap_node(listNode* node1, listNode* node2)
 {
     fileinfo tmp;
@@ -320,20 +321,23 @@ void swap_node(listNode* node1, listNode* node2)
     node2->data = tmp;
 }
 
-//
+// 파일 세트의 맨 끝에 파일을 추가하는 함수
 void append_node(listNode* p, char* pathname)
 {
     listNode *newNode = (listNode*)malloc(sizeof(listNode));
     int count = p->data.count;
 
+    // 카운트를 증가시키고, 새로운 노드를 만들고 데이터 복사
     p->data.count++;
     newNode->data = p->data;
 
+    // 해당 파일 세트의 가장 끝에 있는 파일로 이동
     for (int i = 0; i < count-1; i++) {
         p = p->next;
         p->data.count++;
     }
 
+    // 노드 경로 업데이트, 해당 노드를 마지막 위치에 삽입
     strcpy(newNode->data.path, pathname);
     newNode->next = p->next;
     p->next = newNode;
