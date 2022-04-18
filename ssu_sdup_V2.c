@@ -116,6 +116,8 @@ void find_hash(int argc, char *argv[])
     struct stat statbuf;
     struct dirent** namelist;
     char *homeptr;
+    char extension[NAMEMAX];
+    char *ptr;
     int i;
     int count;
 
@@ -125,6 +127,12 @@ void find_hash(int argc, char *argv[])
     // 입력 관련 에러 처리
     if (argc != ARGMAX) {
         printf("ERROR: Arguments error\n");
+        return;
+    }
+
+    // argv[1] error 
+    if(strcmp(argv[1], "*") && strncmp(argv[1], "*.", 2)) {
+        printf("ERROR: filename error\n");
         return;
     }
 
@@ -195,8 +203,20 @@ void find_hash(int argc, char *argv[])
 
             if (S_ISDIR(statbuf.st_mode)) // 폴더인 경우 큐에 추가
                 Enqueue(&queue, pathname);
-            else if (S_ISREG(statbuf.st_mode)) 
-                head = add_list(head, pathname);
+            else if (S_ISREG(statbuf.st_mode)) { // 정규파일인 경우
+                if (!strcmp(argv[1], "*")) // 만약 파일이 "*"인 경우
+                     head = add_list(head, pathname);
+                else {                                // "*.~" 형태인 경우
+                    strcpy(extension, strstr(argv[1], "."));  // 확장자 추출
+                    ptr = strstr(strrchr(pathname, '/'), extension); // 확장자가 포함되어 있는 문자열 찾기
+                    if(ptr != NULL) {
+                        if (strlen(ptr) == strlen(extension)) 
+                            head = add_list(head, pathname);
+                    }
+                    else
+                        continue;
+                }
+            }
         }
     }
 
@@ -351,20 +371,22 @@ void append_node(listNode* p, char* pathname)
 void print_list(listNode* head)
 {
     listNode* p = head;
+    struct stat statbuf;
     int num = p->data.count;
+    int index = 1;
 
     while(1) {
         char *hash = fmd5(p->data.path);
-
-        printf("size : %ld bytes ", p->data.size);
-        printf("hash : %s\n", hash);
+        printf("---- Identical files #%d (%ld bytes - %s) ----\n", index, p->data.size, hash);
         free(hash);
         for (int i = 0; i < num; i++) {
-            printf("count : %d ", p->data.count);
-            printf("path : %s \n", p->data.path);
+            lstat(p->data.path, &statbuf);
+            printf("[%d] %s (mtime : %s) (atime : %s)\n", i + 1, p->data.path, get_time(statbuf.st_mtime), get_time(statbuf.st_atime));
             p = p->next;
         }
+        printf("\n");
         if (p == NULL) break;
+        index++;
         num = p->data.count;
     }
 }
