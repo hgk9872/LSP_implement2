@@ -36,7 +36,6 @@ typedef struct Queue
 typedef struct fileinfo {
     int count;
     size_t size;
-    char hash[PATHMAX];
     char path[PATHMAX];
 }fileinfo;
 
@@ -181,7 +180,7 @@ void find_hash(int argc, char *argv[])
                 continue;
 
             if (!strcmp(namelist[i]->d_name, "proc") || !strcmp(namelist[i]->d_name, "run") || !strcmp(namelist[i]->d_name, "sys"))
-                    continue;
+                continue;
 
             if (!strcmp(dirname, "/")) { // 경로가 루트인 경우
                 sprintf(pathname, "%s%s", dirname, namelist[i]->d_name);
@@ -196,7 +195,7 @@ void find_hash(int argc, char *argv[])
 
             if (S_ISDIR(statbuf.st_mode)) // 폴더인 경우 큐에 추가
                 Enqueue(&queue, pathname);
-            else if (S_ISREG(statbuf.st_mode))
+            else if (S_ISREG(statbuf.st_mode)) 
                 head = add_list(head, pathname);
         }
     }
@@ -225,7 +224,7 @@ listNode* add_list(listNode* head, char *pathname)
     fileinfo tmp;
     struct stat statbuf;
     int size;
-    listNode* p;
+    listNode* p = head;
 
     // 에러 처리
     if (lstat(pathname, &statbuf) < 0) {
@@ -236,19 +235,23 @@ listNode* add_list(listNode* head, char *pathname)
     size = statbuf.st_size;
 
     // 리스트의 모든 노드를 순회하면서
-    for (p = head; p != NULL; p = p->next) {
-        if (p->data.size == size) {          //   만약 사이즈가 같고,
-            if (!strcmp(fmd5(p->data.path), fmd5(pathname))) {  // 해시값도 같다면
-                append_node(p, pathname);    // 파일 세트의 맨 끝에 해당 파일 추가
+    while (p != NULL) {
+        if (p->data.size == size) {                             //   만약 사이즈가 같고,
+            char* originhash = fmd5(p->data.path);
+            char* newhash = fmd5(pathname);
+            if (!strcmp(originhash, newhash)) {  // 해시값도 같다면
+                free(originhash);
+                free(newhash);
+                append_node(p, pathname);                       // 파일 세트의 맨 끝에 해당 파일 추가
                 break;
             }
         }
+        p = p->next;
     }
 
     // 모든 노드를 순회했을 때, 리스트에 존재하지 않는 경우
     if (p == NULL) {
         tmp.count = 1;
-        strcpy(tmp.hash, fmd5(pathname));
         strcpy(tmp.path, pathname);
         tmp.size = statbuf.st_size;
         add_node(&head, tmp);
@@ -261,11 +264,12 @@ listNode* add_list(listNode* head, char *pathname)
 void add_node(listNode** head, fileinfo tmp)
 {
     listNode *p = (listNode*)malloc(sizeof(listNode));
+    p->next = NULL;
     p->data = tmp;
 
     //만약 리스트가 비어있는 경우
-    if ((*head) == NULL)
-       (*head) = p; 
+    if ((*head) == NULL) 
+       (*head) = p;
     else {
         p->next = *head;
         (*head) = p;
@@ -350,8 +354,11 @@ void print_list(listNode* head)
     int num = p->data.count;
 
     while(1) {
+        char *hash = fmd5(p->data.path);
+
         printf("size : %ld bytes ", p->data.size);
-        printf("hash : %s\n", p->data.hash);
+        printf("hash : %s\n", hash);
+        free(hash);
         for (int i = 0; i < num; i++) {
             printf("count : %d ", p->data.count);
             printf("path : %s \n", p->data.path);
