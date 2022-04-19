@@ -10,6 +10,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <openssl/md5.h>
+#include <ctype.h>
 
 #define PATHMAX 4096
 #define NAMEMAX 255
@@ -53,6 +54,7 @@ int isEmpty(Queue *queue);
 void Enqueue(Queue *queue, char *path);
 char *Dequeue(Queue *queue);
 
+int input_to_byte(char *strsize);
 listNode* add_list(listNode *head, char *pathname);
 void add_node(listNode **head, fileinfo tmp); 
 void print_list(listNode *head);
@@ -63,7 +65,7 @@ void find_hash(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 //listNode* update_node(listNode *p, char *pathname);
 void append_node(listNode* head, char* pathname);
-//listNode* delete_node(listNode* head);
+listNode* delete_node(listNode* head);
 void sort_node(listNode* head);
 void swap_node(listNode* node1, listNode* node2);
 
@@ -117,9 +119,12 @@ void find_hash(int argc, char *argv[])
     struct dirent** namelist;
     char *homeptr;
     char extension[NAMEMAX];
+    char inputsize[NAMEMAX];
     char *ptr;
     int i;
     int count;
+    double minsize;
+    double maxsize;
 
     //
     gettimeofday(&begin_t, NULL);
@@ -135,6 +140,7 @@ void find_hash(int argc, char *argv[])
         printf("ERROR: filename error\n");
         return;
     }
+
 
     // 만약 홈디렉토리가 경로에 포함된 경우 
     if ((homeptr = strchr(argv[4], '~')) != NULL) {
@@ -162,6 +168,24 @@ void find_hash(int argc, char *argv[])
         printf("ERROR: Path must be directory\n");
         return;
     }
+
+    // minsize 
+    if (!strcmp(argv[2], "~"))
+        minsize = 0; 
+    else if ((minsize = input_to_byte(argv[2])) == 0) {
+        printf("ERROR : MINSIZE error\n");
+        return;
+    }
+
+    // maxsiz
+    if (!strcmp(argv[3], "~"))
+        maxsize = -1;
+    else if ((maxsize = input_to_byte(argv[3])) == 0) {
+        printf("ERROR : MAXSIZE error\n");
+        return;
+    }
+
+    printf("size ----- - - -- ---- %f\n", minsize);
 
     printf("rootPath : %s\n", dirname); // 파일의 절대경로 확인
 
@@ -204,6 +228,16 @@ void find_hash(int argc, char *argv[])
             if (S_ISDIR(statbuf.st_mode)) // 폴더인 경우 큐에 추가
                 Enqueue(&queue, pathname);
             else if (S_ISREG(statbuf.st_mode)) { // 정규파일인 경우
+                //
+                if (maxsize == -1) {
+                    if (statbuf.st_size < minsize)
+                        continue;
+                }
+                else {
+                    if (statbuf.st_size < minsize || statbuf.st_size > maxsize)
+                        continue;
+                }
+                
                 if (!strcmp(argv[1], "*")) // 만약 파일이 "*"인 경우
                      head = add_list(head, pathname);
                 else {                                // "*.~" 형태인 경우
@@ -236,6 +270,39 @@ void find_hash(int argc, char *argv[])
 
     return;
 
+}
+
+//
+int input_to_byte(char *strsize)
+{
+    double inputsize;
+    int byte;
+
+    //
+    if (strstr(strsize, "KB") != NULL || strstr(strsize, "kb") != NULL) {
+        inputsize = atof(strsize);
+        byte = inputsize * 1024;
+        return byte;
+    }
+    if (strstr(strsize, "MB") != NULL || strstr(strsize, "mb") != NULL) {
+        inputsize = atof(strsize);
+        byte = inputsize * 1024 * 1024;
+        return byte;
+    }
+    if (strstr(strsize, "GB") != NULL || strstr(strsize, "gb") != NULL) {
+        inputsize = atof(strsize);
+        byte = inputsize * 1024 * 1024 * 1024;
+        return byte;
+    }
+
+    //
+    for(int i = 0; strsize[i] != '\0'; i++)
+    {
+        if (isdigit(strsize[i]) == 0) // if not only integer
+            return 0;
+    }
+    byte = atoi(strsize);
+    return byte;
 }
 
 // 파일을 연결리스트에 추가하여 중복파일 관리
@@ -380,6 +447,7 @@ void print_list(listNode* head)
         printf("---- Identical files #%d (%ld bytes - %s) ----\n", index, p->data.size, hash);
         free(hash);
         for (int i = 0; i < num; i++) {
+            printf("count %d -----", p->data.count);
             lstat(p->data.path, &statbuf);
             printf("[%d] %s (mtime : %s) (atime : %s)\n", i + 1, p->data.path, get_time(statbuf.st_mtime), get_time(statbuf.st_atime));
             p = p->next;
@@ -391,8 +459,29 @@ void print_list(listNode* head)
     }
 }
 
+// 파일세트의 개수가 하나(count = 1)인 노드 제거
+listNode* delete_node(listNode* head)
+{
+    listNode* delete;
 
+    if (head == NULL) return NULL;
 
+    if (head->data.count == 1) {
+        delete = head;
+        head = delete->next;
+        free(delete);
+    }
+
+    for (listNode *p = head; p != NULL; p = p->next) {
+        delete = p->next;
+        if (delete->data.count == 1) {
+            p->next = delete->next;
+            free(delete);
+        }
+    }
+
+    return head;
+}
 
 
 
