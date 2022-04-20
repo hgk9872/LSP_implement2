@@ -54,7 +54,7 @@ int isEmpty(Queue *queue);
 void Enqueue(Queue *queue, char *path);
 char *Dequeue(Queue *queue);
 
-int input_to_byte(char *strsize);
+double input_to_byte(char *strsize);
 listNode* add_list(listNode *head, char *pathname);
 void add_node(listNode **head, fileinfo tmp); 
 void print_list(listNode *head);
@@ -65,9 +65,10 @@ void find_hash(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 //listNode* update_node(listNode *p, char *pathname);
 void append_node(listNode* head, char* pathname);
-listNode* delete_node(listNode* head);
+void delete_node(listNode* head);
 void sort_node(listNode* head);
 void swap_node(listNode* node1, listNode* node2);
+void remove_node(listNode** head, listNode* delete);
 
 char* fmd5(char* pathname);
 
@@ -185,8 +186,6 @@ void find_hash(int argc, char *argv[])
         return;
     }
 
-    printf("size ----- - - -- ---- %f\n", minsize);
-
     printf("rootPath : %s\n", dirname); // 파일의 절대경로 확인
 
     // Queue를 사용해서 BFS 디렉토리 탐색 구현
@@ -254,7 +253,7 @@ void find_hash(int argc, char *argv[])
         }
     }
 
-//    head = delete_node(head);
+//    delete_node(head);
     sort_node(head);
     print_list(head);
 
@@ -273,36 +272,39 @@ void find_hash(int argc, char *argv[])
 }
 
 //
-int input_to_byte(char *strsize)
+double input_to_byte(char *strsize)
 {
     double inputsize;
-    int byte;
+    int pointnum = 0;
 
     //
     if (strstr(strsize, "KB") != NULL || strstr(strsize, "kb") != NULL) {
         inputsize = atof(strsize);
-        byte = inputsize * 1024;
-        return byte;
+        return inputsize * 1024;
     }
     if (strstr(strsize, "MB") != NULL || strstr(strsize, "mb") != NULL) {
         inputsize = atof(strsize);
-        byte = inputsize * 1024 * 1024;
-        return byte;
+        return inputsize * 1024 * 1024;
     }
     if (strstr(strsize, "GB") != NULL || strstr(strsize, "gb") != NULL) {
         inputsize = atof(strsize);
-        byte = inputsize * 1024 * 1024 * 1024;
-        return byte;
+        return inputsize * 1024 * 1024 * 1024;
     }
 
     //
     for(int i = 0; strsize[i] != '\0'; i++)
     {
+        if (strsize[i] == '.') {
+            pointnum++;
+            continue;
+        }
         if (isdigit(strsize[i]) == 0) // if not only integer
             return 0;
     }
-    byte = atoi(strsize);
-    return byte;
+    if (pointnum > 1)
+        return 0;
+    inputsize = atof(strsize);
+    return inputsize;
 }
 
 // 파일을 연결리스트에 추가하여 중복파일 관리
@@ -439,10 +441,17 @@ void print_list(listNode* head)
 {
     listNode* p = head;
     struct stat statbuf;
-    int num = p->data.count;
-    int index = 1;
+    int num;
+    int index = 0;
 
     while(1) {
+        if (p == NULL) break;
+        if (p->data.count == 1) {
+            p = p->next;
+            continue;
+        }
+        index++;
+        num = p->data.count;
         char *hash = fmd5(p->data.path);
         printf("---- Identical files #%d (%ld bytes - %s) ----\n", index, p->data.size, hash);
         free(hash);
@@ -453,34 +462,44 @@ void print_list(listNode* head)
             p = p->next;
         }
         printf("\n");
-        if (p == NULL) break;
-        index++;
         num = p->data.count;
     }
+
+    if (index == 0)
+        printf("No duplicates in \n");
 }
 
 // 파일세트의 개수가 하나(count = 1)인 노드 제거
-listNode* delete_node(listNode* head)
+void delete_node(listNode* head)
 {
-    listNode* delete;
-
-    if (head == NULL) return NULL;
-
-    if (head->data.count == 1) {
-        delete = head;
-        head = delete->next;
-        free(delete);
-    }
-
-    for (listNode *p = head; p != NULL; p = p->next) {
-        delete = p->next;
-        if (delete->data.count == 1) {
-            p->next = delete->next;
-            free(delete);
+    while(1) {
+        for(listNode *p = head; p != NULL; p = p->next) {
+            if (p == NULL) printf("AAAAAAAAAAA\n");
+            if(p->data.count == 1) {
+                remove_node(&head, p);
+                break;
+            }
         }
     }
+}
 
-    return head;
+// 특정노드 삭제..... 
+void remove_node(listNode** head, listNode* delete)
+{
+    // 헤드가 삭제노드면
+    if ((*head) == delete)
+        (*head) = (*head)->next;
+    else {
+        // 삭제노드가 헤드가 아닌 경우 
+        listNode* p = (*head);
+
+        while ((p->next != delete) && (p != NULL)) {
+            p = p->next;
+        }
+
+        p->next = delete->next;
+    }
+    free(delete);
 }
 
 
