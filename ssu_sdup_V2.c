@@ -57,7 +57,7 @@ char *Dequeue(Queue *queue);
 double input_to_byte(char *strsize);
 listNode* add_list(listNode *head, char *pathname);
 void add_node(listNode **head, fileinfo tmp); 
-void print_list(listNode *head);
+int print_list(listNode *head);
 char *get_time(time_t stime);
 int split(char *input, char *delimiter, char* argv[]);
 void command_help(void);
@@ -69,7 +69,10 @@ void delete_node(listNode* head);
 void sort_node(listNode* head);
 void swap_node(listNode* node1, listNode* node2);
 void remove_node(listNode** head, listNode* delete);
+void index_option(void);
+void delete_list(listNode** head);
 
+const char* comma(long size);
 char* fmd5(char* pathname);
 
 int main(void)
@@ -255,7 +258,8 @@ void find_hash(int argc, char *argv[])
 
 //    delete_node(head);
     sort_node(head);
-    print_list(head);
+    // 중복파일리스트를 출력하고, 만약 중복리스트가 없는 경우 flag = 0
+    int flag = print_list(head);
 
     gettimeofday(&end_t, NULL);
 
@@ -265,7 +269,14 @@ void find_hash(int argc, char *argv[])
         end_t.tv_usec += 1000000;
     }
     end_t.tv_usec -= begin_t.tv_usec;
-    printf("Runtime: %ld:%06ld(sec:usec)\n", end_t.tv_sec, end_t.tv_usec);
+    printf("Searching time: %ld:%06ld(sec:usec)\n\n", end_t.tv_sec, end_t.tv_usec);
+
+    // 만약 중복리스트가 존재하는 경우 옵션 프롬프트 시작
+    if (flag)
+        index_option();
+
+    // 링크드리스트 데이터 제거
+    delete_list(&head);
 
     return;
 
@@ -437,7 +448,7 @@ void append_node(listNode* p, char* pathname)
 }
 
 // 연결리스트의 각 노드의 정보(파일)들 출력
-void print_list(listNode* head)
+int print_list(listNode* head)
 {
     listNode* p = head;
     struct stat statbuf;
@@ -453,7 +464,7 @@ void print_list(listNode* head)
         index++;
         num = p->data.count;
         char *hash = fmd5(p->data.path);
-        printf("---- Identical files #%d (%ld bytes - %s) ----\n", index, p->data.size, hash);
+        printf("---- Identical files #%d (%s bytes - %s) ----\n", index, comma(p->data.size), hash);
         free(hash);
         for (int i = 0; i < num; i++) {
             printf("count %d -----", p->data.count);
@@ -465,8 +476,13 @@ void print_list(listNode* head)
         num = p->data.count;
     }
 
-    if (index == 0)
+    if (index != 0)
+        return 1;
+
+    if (index == 0) {
         printf("No duplicates in \n");
+        return 0;
+    }
 }
 
 // 파일세트의 개수가 하나(count = 1)인 노드 제거
@@ -502,7 +518,52 @@ void remove_node(listNode** head, listNode* delete)
     free(delete);
 }
 
+void index_option(void)
+{
+    int argc = 0;
+    char input[BUFMAX];
+    char *argv[3];
 
+    // 프롬프트 시작
+    while(1) {
+        printf(">> ");
+        fgets(input, sizeof(input), stdin);
+        input[strlen(input) - 1] = '\0';
+        argc = split(input, " ", argv);
+
+        if (argc == 0)
+            continue;
+
+        
+        // d옵션
+//        if ((strcmp(argv[0], "d") == 0) && (argc == 3))
+
+        
+
+
+
+        // exit 입력받으면 프롬프트로 이동
+        if ((strcmp(argv[0], "exit") == 0) && (argc == 1)) {
+            printf(">> Back to Prompt\n");
+            return;
+        }
+    }
+
+}
+
+void delete_list(listNode** head)
+{
+    listNode *p, *iterator;
+    iterator = *head;
+    while(iterator)
+    {
+        p = iterator->next;
+        free(iterator);
+        iterator = p;
+    }
+
+    *head = NULL;
+}
 
 
 
@@ -641,4 +702,24 @@ char *get_time(time_t stime)
     sprintf(time, "%04d-%02d-%02d %02d:%02d:%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 
     return time;
+}
+
+const char *comma(long size)
+{
+    static char comma_str[64];
+    char str[64];
+    int idx, len, cidx = 0, mod;
+
+    sprintf(str, "%ld", size);
+    len = strlen(str);
+    mod = len % 3;
+    for (idx = 0; idx < len; idx++) {
+        if (idx != 0 && (idx) % 3 == mod) {
+            comma_str[cidx++] = ',';
+        }
+        comma_str[cidx++] = str[idx];
+    }
+    comma_str[cidx] = 0x00;
+
+    return comma_str;
 }
