@@ -10,6 +10,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <openssl/md5.h>
+#include <openssl/sha.h>
 #include <ctype.h>
 
 #define PATHMAX 4096
@@ -65,15 +66,16 @@ void find_hash(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 //listNode* update_node(listNode *p, char *pathname);
 void append_node(listNode* head, char* pathname);
-void delete_node(listNode* head);
 void sort_node(listNode* head);
 void swap_node(listNode* node1, listNode* node2);
-void remove_node(listNode** head, listNode* delete);
+void delete_node(listNode** head, listNode* delete);
 void index_option(void);
 void delete_list(listNode** head);
+void delete_option(listNode *head, int sindex, int fno);
 
 const char* comma(long size);
 char* fmd5(char* pathname);
+char* sha1(char* pathname);
 
 int main(void)
 {
@@ -175,7 +177,7 @@ void find_hash(int argc, char *argv[])
 
     // minsize 
     if (!strcmp(argv[2], "~"))
-        minsize = 0; 
+        minsize = 1; 
     else if ((minsize = input_to_byte(argv[2])) == 0) {
         printf("ERROR : MINSIZE error\n");
         return;
@@ -256,14 +258,14 @@ void find_hash(int argc, char *argv[])
         }
     }
 
-//    delete_node(head);
+    // 오름차순으로 링크드리스트 정렬
     sort_node(head);
     // 중복파일리스트를 출력하고, 만약 중복리스트가 없는 경우 flag = 0
     int flag = print_list(head);
 
     gettimeofday(&end_t, NULL);
 
-    //
+    // 종료시간 측정
     end_t.tv_sec -= begin_t.tv_sec;
     if (end_t.tv_sec < begin_t.tv_usec) {
         end_t.tv_usec += 1000000;
@@ -282,13 +284,13 @@ void find_hash(int argc, char *argv[])
 
 }
 
-//
+// 입력받은 인자를 byte단위로 변환시키는 함수
 double input_to_byte(char *strsize)
 {
     double inputsize;
     int pointnum = 0;
 
-    //
+    // KB, MB, GB 입력받을 때, byte로 변환하여 리턴
     if (strstr(strsize, "KB") != NULL || strstr(strsize, "kb") != NULL) {
         inputsize = atof(strsize);
         return inputsize * 1024;
@@ -302,18 +304,20 @@ double input_to_byte(char *strsize)
         return inputsize * 1024 * 1024 * 1024;
     }
 
-    //
+    // 숫자만 입력받았는지 체크
     for(int i = 0; strsize[i] != '\0'; i++)
     {
-        if (strsize[i] == '.') {
+        if (strsize[i] == '.') { // floating point도 입력받을 수 있음
             pointnum++;
             continue;
         }
-        if (isdigit(strsize[i]) == 0) // if not only integer
+        if (isdigit(strsize[i]) == 0) // .을 제외한 다른 문자가 들어오는 경우
             return 0;
     }
+    // point가 두개 이상인 경우 실수가 아님
     if (pointnum > 1)
         return 0;
+
     inputsize = atof(strsize);
     return inputsize;
 }
@@ -336,13 +340,13 @@ listNode* add_list(listNode* head, char *pathname)
 
     // 리스트의 모든 노드를 순회하면서
     while (p != NULL) {
-        if (p->data.size == size) {                             //   만약 사이즈가 같고,
+        if (p->data.size == size) {      // 만약 사이즈가 같고,
             char* originhash = fmd5(p->data.path);
             char* newhash = fmd5(pathname);
             if (!strcmp(originhash, newhash)) {  // 해시값도 같다면
                 free(originhash);
                 free(newhash);
-                append_node(p, pathname);                       // 파일 세트의 맨 끝에 해당 파일 추가
+                append_node(p, pathname);       // 파일 세트의 맨 끝에 해당 파일 추가
                 break;
             }
         }
@@ -485,22 +489,8 @@ int print_list(listNode* head)
     }
 }
 
-// 파일세트의 개수가 하나(count = 1)인 노드 제거
-void delete_node(listNode* head)
-{
-    while(1) {
-        for(listNode *p = head; p != NULL; p = p->next) {
-            if (p == NULL) printf("AAAAAAAAAAA\n");
-            if(p->data.count == 1) {
-                remove_node(&head, p);
-                break;
-            }
-        }
-    }
-}
-
 // 특정노드 삭제..... 
-void remove_node(listNode** head, listNode* delete)
+void delete_node(listNode** head, listNode* delete)
 {
     // 헤드가 삭제노드면
     if ((*head) == delete)
@@ -518,6 +508,7 @@ void remove_node(listNode** head, listNode* delete)
     free(delete);
 }
 
+// 옵션 프롬프트 출력하여 옵션 입력받는 함수
 void index_option(void)
 {
     int argc = 0;
@@ -535,8 +526,12 @@ void index_option(void)
             continue;
 
         
-        // d옵션
-//        if ((strcmp(argv[0], "d") == 0) && (argc == 3))
+        // d 옵션
+        if ((strcmp(argv[1], "d") == 0) && (argc == 3)) {
+            delete_option(head, atoi(argv[0]), atoi(argv[2]));
+            print_list(head); 
+            continue;
+        }
 
         
 
@@ -551,6 +546,41 @@ void index_option(void)
 
 }
 
+void delete_option(listNode *head, int sindex, int fno)
+{
+    listNode *p = head;
+    listNode *delete;
+    int index = 0;
+    int count;
+
+    while (1) {
+        // count = 1인 파일세트는 패스
+        if (p->data.count == 1) {
+            p = p->next;
+            continue;
+        }
+
+        index++;
+        // 입력받은 파일세트 인덱스로 이동
+        if (index == sindex) {
+            count = p->data.count;
+            for (int i = 1; i <= count; i++) {
+                p->data.count--; // 해당 파일세트의 count 하나씩 감소
+                if (i == fno) { // 삭제하려는 파일 차례인 경우
+                    delete = p; // 삭제할 노드로 지정
+                }
+                p = p->next;
+            }
+            printf("\"%s\" has been deleted in #%d\n\n", delete->data.path, sindex);
+            remove(delete->data.path);
+            delete_node(&head, delete);
+            return;
+        }
+    }
+}
+              
+
+// 헤드부터 순회하여 모든 노드 삭제
 void delete_list(listNode** head)
 {
     listNode *p, *iterator;
@@ -564,15 +594,6 @@ void delete_list(listNode** head)
 
     *head = NULL;
 }
-
-
-
-
-
-
-
-
-
 
 
 // Queue 초기화하는 함수
@@ -657,7 +678,7 @@ void command_help(void)
 }
 
 //fmd5
-char* fmd5(char* pathname)
+char* sha1(char* pathname)
 {
     int i;
     FILE *IN;
@@ -691,6 +712,42 @@ char* fmd5(char* pathname)
 
     return hash;
 }
+
+char* fmd5(char* pathname)
+{
+    int i;
+    FILE *IN;
+    SHA_CTX c;
+    char *hash = (char*)malloc(sizeof(char) * BUFMAX);
+
+    IN = fopen(pathname, "r");
+    if (IN == NULL) {
+        fprintf(stderr, "hash error %s\n", pathname);
+        exit(1);
+    }
+
+    unsigned char md[SHA_DIGEST_LENGTH];
+    int fd;
+    static unsigned char buf[BUFMAX*16];
+
+    fd = fileno(IN);
+    SHA1_Init(&c);
+    for (;;)
+    {
+        i = read(fd, buf, BUFMAX*16);
+        if (i <= 0) break;
+        SHA1_Update(&c, buf, (unsigned long)i);
+    }
+    SHA1_Final(&(md[0]), &c);
+
+    for (i = 0; i < SHA_DIGEST_LENGTH; i++)
+        sprintf(&hash[i*2], "%02x", md[i]);
+
+    fclose(IN);
+
+    return hash;
+}
+
 
 //
 char *get_time(time_t stime)
