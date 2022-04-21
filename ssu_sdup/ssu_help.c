@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 int main(void)
 {
@@ -12,4 +13,6 @@ int main(void)
     printf("           t : force move to Trash except the recently modified file\n");
     printf("    > help\n");
     printf("    > exit\n\n");
+
+    exit(0);
 }

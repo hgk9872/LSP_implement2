@@ -9,16 +9,13 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
-#include <sys/wait.h>
 #include <openssl/md5.h>
-#include <openssl/sha.h>
 #include <ctype.h>
 
 #define PATHMAX 4096
 #define NAMEMAX 255
 #define BUFMAX 1024
-#define ARGMAX 5
-
+#define ARGMAX 6
 
 // Queue를 이용한 디렉토리 탐색을 위한 노드 정의
 typedef struct Node
@@ -62,6 +59,7 @@ void add_node(listNode **head, fileinfo tmp);
 int print_list(listNode *head);
 char *get_time(time_t stime);
 int split(char *input, char *delimiter, char* argv[]);
+void command_help(void);
 void find_hash(int argc, char *argv[]);
 listNode* search_size(listNode *head, int size);
 //listNode* update_node(listNode *p, char *pathname);
@@ -72,70 +70,15 @@ void delete_node(listNode** head, listNode* delete);
 void index_option(void);
 void delete_list(listNode** head);
 void delete_option(listNode *head, int sindex, int fno);
+void trash_option(listNode *head, int sindex);
+const char *min_time_path(listNode *p);
+void move_to_bin(char *path);
 
 const char* comma(long size);
 char* fmd5(char* pathname);
-char* sha1(char* pathname);
-void command_help(void);
 
-int main(void)
-{
-
-    int argc = 0;
-    char input[BUFMAX];
-    char *argv[ARGMAX];
-    pid_t pid;
-    int status;
-
-    //프롬프트 시작
-    while (1) {
-        printf("20192209> ");
-        fgets(input, sizeof(input), stdin);
-        input[strlen(input) - 1] = '\0';
-        argc = split(input, " ", argv);
-
-        if (argc == 0)
-            continue;
-
-        else if (strcmp(argv[0], "exit") == 0) {
-            printf("Prompt End\n");
-            break;
-        }
-
-        if((pid = fork()) < 0) {
-            fprintf(stderr, "fork error");
-        }
-
-        else if(pid == 0) { //자식의 경우
-
-            if (strcmp(argv[0], "fmd5") == 0) {
-                char *args[] = {"./ssu_find-md5", argv[0], argv[1], argv[2], argv[3], argv[4], NULL};
-                execv(args[0], args);
-                exit(0);
-            }
-
-            else if (strcmp(argv[0], "fsha1") == 0) {
-                char *args[] = {"./ssu_find-sha1", argv[0], argv[1], argv[2], argv[3], argv[4], NULL};
-                execv(args[0], args);
-                exit(0);
-            }
-
-            else {
-                char *args[] = {"./ssu_help", NULL};
-                execv(args[0], args);
-                exit(0);
-            }
-        }
-
-        if((pid = waitpid(pid, &status, 0)) < 0)
-            fprintf(stderr, "waitpid error");
-    }
-
-    exit(0);
-}
-
-// fmd5 해쉬값으로 파일 찾아서 중복파일 출력하는 함수
-void find_hash(int argc, char *argv[]) 
+// fmd5 해쉬값으로 파일 찾아서 중복파일 출력
+int main(int argc, char *argv[]) 
 {
     char dirname[PATHMAX];
     char pathname[PATHMAX];
@@ -157,28 +100,28 @@ void find_hash(int argc, char *argv[])
     // 입력 관련 에러 처리
     if (argc != ARGMAX) {
         printf("ERROR: Arguments error\n");
-        return;
+        exit(1);
     }
 
-    // argv[1] error 
-    if(strcmp(argv[1], "*") && strncmp(argv[1], "*.", 2)) {
+    // only input "*", "*." file 
+    if(strcmp(argv[2], "*") && strncmp(argv[2], "*.", 2)) {
         printf("ERROR: filename error\n");
-        return;
+        exit(1);
     }
 
 
     // 만약 홈디렉토리가 경로에 포함된 경우 
-    if ((homeptr = strchr(argv[4], '~')) != NULL) {
+    if ((homeptr = strchr(argv[5], '~')) != NULL) {
         sprintf(dirname, "%s%s", getenv("HOME"), homeptr + 1);
         if(access(dirname, F_OK) < 0){
             fprintf(stderr, "access error for %s\n", dirname);
-            return;
+            exit(1);
         }
     }
     else {  // 경로에 홈 디렉토리가 포함되지 않는 경우
-        if (realpath(argv[4], dirname) == NULL) {
+        if (realpath(argv[5], dirname) == NULL) {
             printf("ERROR: Path exist error\n");
-            return;
+            exit(1);
         }
     }
 
@@ -191,26 +134,24 @@ void find_hash(int argc, char *argv[])
     // 만약 폴더가 아니라면
     if (!S_ISDIR(statbuf.st_mode)) {
         printf("ERROR: Path must be directory\n");
-        return;
+        exit(1);
     }
 
     // minsize 
-    if (!strcmp(argv[2], "~"))
-        minsize = 1; 
-    else if ((minsize = input_to_byte(argv[2])) == 0) {
-        printf("ERROR : MINSIZE error\n");
-        return;
-    }
-
-    // maxsiz
     if (!strcmp(argv[3], "~"))
-        maxsize = -1;
-    else if ((maxsize = input_to_byte(argv[3])) == 0) {
-        printf("ERROR : MAXSIZE error\n");
-        return;
+        minsize = 1; 
+    else if ((minsize = input_to_byte(argv[3])) == 0) {
+        printf("ERROR : MINSIZE error\n");
+        exit(1);
     }
 
-    printf("rootPath : %s\n", dirname); // 파일의 절대경로 확인
+    // maxsize
+    if (!strcmp(argv[4], "~"))
+        maxsize = -1;
+    else if ((maxsize = input_to_byte(argv[4])) == 0) {
+        printf("ERROR : MAXSIZE error\n");
+        exit(1);
+    }
 
     // Queue를 사용해서 BFS 디렉토리 탐색 구현
     Queue queue;
@@ -222,7 +163,6 @@ void find_hash(int argc, char *argv[])
     while (!isEmpty(&queue))
     {
         strcpy(dirname, Dequeue(&queue));
-        printf("Queue Path : %s\n", dirname);
 
         // 꺼낸 큐의 디렉토리의 내부 파일목록을 불러오기
         if((count = scandir(dirname, &namelist, NULL, alphasort)) == -1) {
@@ -261,10 +201,10 @@ void find_hash(int argc, char *argv[])
                         continue;
                 }
                 
-                if (!strcmp(argv[1], "*")) // 만약 파일이 "*"인 경우
+                if (!strcmp(argv[2], "*")) // 만약 파일이 "*"인 경우
                      head = add_list(head, pathname);
                 else {                                // "*.~" 형태인 경우
-                    strcpy(extension, strstr(argv[1], "."));  // 확장자 추출
+                    strcpy(extension, strstr(argv[2], "."));  // 확장자 추출
                     ptr = strstr(strrchr(pathname, '/'), extension); // 확장자가 포함되어 있는 문자열 찾기
                     if(ptr != NULL) {
                         if (strlen(ptr) == strlen(extension)) 
@@ -295,11 +235,13 @@ void find_hash(int argc, char *argv[])
     // 만약 중복리스트가 존재하는 경우 옵션 프롬프트 시작
     if (flag)
         index_option();
+    else
+        printf("No duplicated in %s\n\n", pathname);
 
     // 링크드리스트 데이터 제거
     delete_list(&head);
 
-    return;
+    exit(0);
 
 }
 
@@ -490,7 +432,6 @@ int print_list(listNode* head)
         printf("---- Identical files #%d (%s bytes - %s) ----\n", index, comma(p->data.size), hash);
         free(hash);
         for (int i = 0; i < num; i++) {
-            printf("count %d -----", p->data.count);
             lstat(p->data.path, &statbuf);
             printf("[%d] %s (mtime : %s) (atime : %s)\n", i + 1, p->data.path, get_time(statbuf.st_mtime), get_time(statbuf.st_atime));
             p = p->next;
@@ -502,10 +443,8 @@ int print_list(listNode* head)
     if (index != 0)
         return 1;
 
-    if (index == 0) {
-        printf("No duplicates in \n");
+    if (index == 0) 
         return 0;
-    }
 }
 
 // 특정노드 삭제..... 
@@ -544,23 +483,27 @@ void index_option(void)
         if (argc == 0)
             continue;
 
-        
+        // exit 입력받으면 프롬프트로 이동
+        if ((strcmp(argv[0], "exit") == 0)) {
+            printf(">> Back to Prompt\n");
+            return;
+        }
         // d 옵션
-        if ((strcmp(argv[1], "d") == 0) && (argc == 3)) {
+        else if ((strcmp(argv[1], "d") == 0) && (argc == 3)) {
             delete_option(head, atoi(argv[0]), atoi(argv[2]));
             print_list(head); 
             continue;
         }
+        else if ((strcmp(argv[1], "t") == 0) && (argc == 2)) {
+            trash_option(head, atoi(argv[0]));
+            print_list(head);
+            continue;
+        }
+        else
+            continue;
 
         
-
-
-
-        // exit 입력받으면 프롬프트로 이동
-        if ((strcmp(argv[0], "exit") == 0) && (argc == 1)) {
-            printf(">> Back to Prompt\n");
-            return;
-        }
+        
     }
 
 }
@@ -595,9 +538,127 @@ void delete_option(listNode *head, int sindex, int fno)
             delete_node(&head, delete);
             return;
         }
+        else {
+            count = p->data.count;
+            for (int i = 1; i <= count; i++)
+                p = p->next;
+        }
+
+        if (p == NULL)
+            return;
     }
 }
-              
+
+// 가장 짧은 수정시간을 갖는 파일을 제외하고 휴지통으로 이동
+void trash_option(listNode* head, int sindex)
+{
+    listNode *p = head;
+    listNode *delete;
+    int index = 0;
+    int count;
+    char *newpath[PATHMAX];
+
+    while (1) {
+        if (p == NULL)
+            return;
+
+        // count = 1인 파일세트는 패스
+        if (p->data.count == 1) {
+            p = p->next;
+            continue;
+        }
+
+        index++;
+        // 입력받은 파일세트 인덱스로 이동
+        if (index == sindex) {
+            count = p->data.count;
+            strcpy(p->data.path, min_time_path(p)); // 첫 번째 노드를 가장 짧은 수정시간의 pathf로 변경
+            p->data.count = 1; // 첫 번째 노드의 count = 1로 변경
+            p = p->next; //다음 노드로 이동
+            for (int i = 2; i <= count; i++) { // 첫 노드 제외하고 순회
+                move_to_bin(p->data.path);
+                delete = p;
+                p = p->next;
+                delete_node(&head, delete); // 순회하면서 각 노드 리스트에서 제거
+            }
+            return;
+        }
+        else {
+            count = p->data.count;
+            for (int i = 1; i <= count; i++)
+                p = p->next;
+        }
+    }
+}
+
+// 가장 접근시간이 짧은 path 찾기
+const char* min_time_path(listNode *p)
+{
+    int count;
+    time_t mintime;
+    struct stat statbuf;
+    static char path[PATHMAX];
+
+    count = p->data.count;
+    lstat(p->data.path, &statbuf);
+    mintime = statbuf.st_mtime;
+
+    for (int i = 1; i <= count; i++) {
+        lstat(p->data.path, &statbuf);
+        if(mintime > statbuf.st_mtime)
+            strcpy(path, p->data.path);
+        p = p->next;
+    }
+
+    return path;
+}
+
+void move_to_bin(char *path)
+{
+    FILE *forigin, *ftrash;
+    char trash[NAMEMAX];
+    char* ptr = NULL;
+    char bin[PATHMAX];
+    int tmp;
+
+    // 환경변수로 휴지통 폴더 생성
+    sprintf(bin, "%s/%s", getenv("HOME"), "ssu_bin");
+    if(access(bin, F_OK) == -1) { // 기존에 존재하지 않으면
+        if (mkdir(bin, 0755) == -1) {
+            perror("move to bin error");
+            return;
+        }
+    }
+
+    // 파일 이름받아 휴지통 폴더로 복사 
+    ptr = strrchr(path, '/');
+    if (ptr == NULL)
+        sprintf(trash, "%s/%s", bin, ptr);
+    else
+        sprintf(trash, "%s%s", bin, ptr);
+
+    if((forigin = fopen(path, "rb")) == NULL)
+        exit(1);
+    ftrash = fopen(trash, "wb");
+
+    while (1) {
+        tmp = fgetc(forigin);
+
+        if(!feof(forigin))
+            fputc(tmp, ftrash);
+        else
+            break;
+    }
+
+    fclose(forigin);
+    fclose(ftrash);
+
+    // 휴지통으로 복사가 끝났으면 기존파일 제거
+    remove(path);
+
+    return;
+}
+
 
 // 헤드부터 순회하여 모든 노드 삭제
 void delete_list(listNode** head)
@@ -683,7 +744,7 @@ int split(char *input, char *delimiter, char *argv[])
 }
 
 //fmd5
-char* sha1(char* pathname)
+char* fmd5(char* pathname)
 {
     int i;
     FILE *IN;
@@ -718,42 +779,6 @@ char* sha1(char* pathname)
     return hash;
 }
 
-char* fmd5(char* pathname)
-{
-    int i;
-    FILE *IN;
-    SHA_CTX c;
-    char *hash = (char*)malloc(sizeof(char) * BUFMAX);
-
-    IN = fopen(pathname, "r");
-    if (IN == NULL) {
-        fprintf(stderr, "hash error %s\n", pathname);
-        exit(1);
-    }
-
-    unsigned char md[SHA_DIGEST_LENGTH];
-    int fd;
-    static unsigned char buf[BUFMAX*16];
-
-    fd = fileno(IN);
-    SHA1_Init(&c);
-    for (;;)
-    {
-        i = read(fd, buf, BUFMAX*16);
-        if (i <= 0) break;
-        SHA1_Update(&c, buf, (unsigned long)i);
-    }
-    SHA1_Final(&(md[0]), &c);
-
-    for (i = 0; i < SHA_DIGEST_LENGTH; i++)
-        sprintf(&hash[i*2], "%02x", md[i]);
-
-    fclose(IN);
-
-    return hash;
-}
-
-
 //
 char *get_time(time_t stime)
 {
@@ -766,6 +791,7 @@ char *get_time(time_t stime)
     return time;
 }
 
+//콤마찍어서 실수로 표기
 const char *comma(long size)
 {
     static char comma_str[64];
@@ -784,18 +810,4 @@ const char *comma(long size)
     comma_str[cidx] = 0x00;
 
     return comma_str;
-}
-
-void command_help(void)
-{
-    printf("Usage:\n");
-    printf("    > fmd5/fsha1 [FILE_EXTENSION] [MINSIZE] [MAXSIZE] [TARGET_DIRECTORY]\n");
-    printf("        >> [SET_INDEX] [OPTION ... ]\n");
-    printf("           [OPTION ... ]\n");
-    printf("           d [LIST_IDX] : delete [LIST_IDX] file\n");
-    printf("           i : ask for comfirmation before delete\n");
-    printf("           f : force delete except the recently modified file\n");
-    printf("           t : force move to Trash except the recently modified file\n");
-    printf("    > help\n");
-    printf("    > exit\n\n");
 }
