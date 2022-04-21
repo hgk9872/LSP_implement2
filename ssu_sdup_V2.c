@@ -72,6 +72,8 @@ void delete_node(listNode** head, listNode* delete);
 void index_option(void);
 void delete_list(listNode** head);
 void delete_option(listNode *head, int sindex, int fno);
+void trash_option(listNode *head, int sindex);
+const char *min_time_path(listNode *p);
 
 const char* comma(long size);
 char* fmd5(char* pathname);
@@ -525,23 +527,27 @@ void index_option(void)
         if (argc == 0)
             continue;
 
-        
+        // exit 입력받으면 프롬프트로 이동
+        if ((strcmp(argv[0], "exit") == 0)) {
+            printf(">> Back to Prompt\n");
+            return;
+        }
         // d 옵션
-        if ((strcmp(argv[1], "d") == 0) && (argc == 3)) {
+        else if ((strcmp(argv[1], "d") == 0) && (argc == 3)) {
             delete_option(head, atoi(argv[0]), atoi(argv[2]));
             print_list(head); 
             continue;
         }
+        else if ((strcmp(argv[1], "t") == 0) && (argc == 2)) {
+            trash_option(head, atoi(argv[0]));
+            print_list(head);
+            continue;
+        }
+        else
+            continue;
 
         
-
-
-
-        // exit 입력받으면 프롬프트로 이동
-        if ((strcmp(argv[0], "exit") == 0) && (argc == 1)) {
-            printf(">> Back to Prompt\n");
-            return;
-        }
+        
     }
 
 }
@@ -576,9 +582,81 @@ void delete_option(listNode *head, int sindex, int fno)
             delete_node(&head, delete);
             return;
         }
+        else {
+            count = p->data.count;
+            for (int i = 1; i <= count; i++)
+                p = p->next;
+        }
+
+        if (p == NULL)
+            return;
     }
 }
-              
+
+// 가장 짧은 수정시간을 갖는 파일을 제외하고 휴지통으로 이동
+void trash_option(listNode* head, int sindex)
+{
+    listNode *p = head;
+    listNode *delete;
+    int index = 0;
+    int count;
+    char *newpath[PATHMAX];
+
+    while (1) {
+        if (p == NULL)
+            return;
+
+        // count = 1인 파일세트는 패스
+        if (p->data.count == 1) {
+            p = p->next;
+            continue;
+        }
+
+        index++;
+        // 입력받은 파일세트 인덱스로 이동
+        if (index == sindex) {
+            count = p->data.count;
+            strcpy(p->data.path, min_time_path(p)); // 첫 번째 노드를 가장 짧은 수정시간의 pathf로 변경
+            p->data.count = 1; // 첫 번째 노드의 count = 1로 변경
+            p = p->next; //다음 노드로 이동
+            for (int i = 2; i <= count; i++) { // 첫 노드 제외하고 순회
+                // 휴지통으로 이동시키기
+                delete = p;
+                p = p->next;
+                delete_node(&head, delete); // 순회하면서 각 노드 리스트에서 제거
+            }
+            return;
+        }
+        else {
+            count = p->data.count;
+            for (int i = 1; i <= count; i++)
+                p = p->next;
+        }
+    }
+}
+
+// 가장 접근시간이 짧은 path 찾기
+const char* min_time_path(listNode *p)
+{
+    int count;
+    time_t mintime;
+    struct stat statbuf;
+    static char path[PATHMAX];
+
+    count = p->data.count;
+    lstat(p->data.path, &statbuf);
+    mintime = statbuf.st_mtime;
+
+    for (int i = 1; i <= count; i++) {
+        lstat(p->data.path, &statbuf);
+        if(mintime > statbuf.st_mtime)
+            strcpy(path, p->data.path);
+        p = p->next;
+    }
+
+    return path;
+}
+
 
 // 헤드부터 순회하여 모든 노드 삭제
 void delete_list(listNode** head)
