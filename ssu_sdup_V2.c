@@ -276,6 +276,8 @@ void find_hash(int argc, char *argv[])
     // 만약 중복리스트가 존재하는 경우 옵션 프롬프트 시작
     if (flag)
         index_option();
+    else
+        printf("No duplicated in %s\n\n", pathname);
 
     // 링크드리스트 데이터 제거
     delete_list(&head);
@@ -482,10 +484,8 @@ int print_list(listNode* head)
     if (index != 0)
         return 1;
 
-    if (index == 0) {
-        printf("No duplicates in \n");
+    if (index == 0) 
         return 0;
-    }
 }
 
 // 특정노드 삭제..... 
