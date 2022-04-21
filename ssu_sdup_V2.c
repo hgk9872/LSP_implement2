@@ -74,6 +74,7 @@ void delete_list(listNode** head);
 void delete_option(listNode *head, int sindex, int fno);
 void trash_option(listNode *head, int sindex);
 const char *min_time_path(listNode *p);
+void move_to_bin(char *path);
 
 const char* comma(long size);
 char* fmd5(char* pathname);
@@ -193,8 +194,6 @@ void find_hash(int argc, char *argv[])
         return;
     }
 
-    printf("rootPath : %s\n", dirname); // 파일의 절대경로 확인
-
     // Queue를 사용해서 BFS 디렉토리 탐색 구현
     Queue queue;
 
@@ -205,7 +204,6 @@ void find_hash(int argc, char *argv[])
     while (!isEmpty(&queue))
     {
         strcpy(dirname, Dequeue(&queue));
-        printf("Queue Path : %s\n", dirname);
 
         // 꺼낸 큐의 디렉토리의 내부 파일목록을 불러오기
         if((count = scandir(dirname, &namelist, NULL, alphasort)) == -1) {
@@ -473,7 +471,6 @@ int print_list(listNode* head)
         printf("---- Identical files #%d (%s bytes - %s) ----\n", index, comma(p->data.size), hash);
         free(hash);
         for (int i = 0; i < num; i++) {
-            printf("count %d -----", p->data.count);
             lstat(p->data.path, &statbuf);
             printf("[%d] %s (mtime : %s) (atime : %s)\n", i + 1, p->data.path, get_time(statbuf.st_mtime), get_time(statbuf.st_atime));
             p = p->next;
@@ -620,7 +617,7 @@ void trash_option(listNode* head, int sindex)
             p->data.count = 1; // 첫 번째 노드의 count = 1로 변경
             p = p->next; //다음 노드로 이동
             for (int i = 2; i <= count; i++) { // 첫 노드 제외하고 순회
-                // 휴지통으로 이동시키기
+                move_to_bin(p->data.path);
                 delete = p;
                 p = p->next;
                 delete_node(&head, delete); // 순회하면서 각 노드 리스트에서 제거
@@ -655,6 +652,52 @@ const char* min_time_path(listNode *p)
     }
 
     return path;
+}
+
+void move_to_bin(char *path)
+{
+    FILE *forigin, *ftrash;
+    char trash[NAMEMAX];
+    char* ptr = NULL;
+    char bin[PATHMAX];
+    int tmp;
+
+    // 환경변수로 휴지통 폴더 생성
+    sprintf(bin, "%s/%s", getenv("HOME"), "ssu_bin");
+    if(access(bin, F_OK) == -1) { // 기존에 존재하지 않으면
+        if (mkdir(bin, 0755) == -1) {
+            perror("move to bin error");
+            return;
+        }
+    }
+
+    // 파일 이름받아 휴지통 폴더로 복사 
+    ptr = strrchr(path, '/');
+    if (ptr == NULL)
+        sprintf(trash, "%s/%s", bin, ptr);
+    else
+        sprintf(trash, "%s%s", bin, ptr);
+
+    if((forigin = fopen(path, "rb")) == NULL)
+        exit(1);
+    ftrash = fopen(trash, "wb");
+
+    while (1) {
+        tmp = fgetc(forigin);
+
+        if(!feof(forigin))
+            fputc(tmp, ftrash);
+        else
+            break;
+    }
+
+    fclose(forigin);
+    fclose(ftrash);
+
+    // 휴지통으로 복사가 끝났으면 기존파일 제거
+    remove(path);
+
+    return;
 }
 
 
@@ -839,6 +882,7 @@ char *get_time(time_t stime)
     return time;
 }
 
+//콤마찍어서 실수로 표기
 const char *comma(long size)
 {
     static char comma_str[64];
